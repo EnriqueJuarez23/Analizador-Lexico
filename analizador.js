@@ -140,7 +140,6 @@ class ParserSintactico {
     const tk = this.actual();
     if (!tk) return null;
 
-    // Directivas (#define / #include)
     if (tk.valor === "#") {
       this.consumir();
       const directiva = this.consumir();
@@ -161,7 +160,6 @@ class ParserSintactico {
       return { tipo: "cascada", nodos: items };
     }
 
-    // Condicional if
     if (tk.valor === "if") {
       this.consumir();
       const nodos = [{ tipo: "cadena", valor: "if" }];
@@ -189,7 +187,6 @@ class ParserSintactico {
       return { tipo: "cascada", nodos };
     }
 
-    // Clase
     if (tk.valor === "class" || (tk.valor === "public" && this.siguiente()?.valor === "class")) {
       const nodos = [];
       if (tk.valor === "public") nodos.push({ tipo: "cadena", valor: this.consumir().valor });
@@ -201,12 +198,10 @@ class ParserSintactico {
       return { tipo: "cascada", nodos };
     }
 
-    // Bloque { ... }
     if (tk.valor === "{") {
       return this.parsearBloqueLlaves();
     }
 
-    // Firmas de función
     if (this.esFirmaFuncion()) {
       const nodos = [];
       while (this.actual() && this.actual().valor !== "(") {
@@ -241,7 +236,6 @@ class ParserSintactico {
       return { tipo: "cascada", nodos };
     }
 
-    // Declaraciones con tipo
     if (["int", "float", "double", "char", "String", "boolean", "var", "let", "const"].includes(tk.valor)) {
       const tipoDato = this.consumir().valor;
       const nodos = [{ tipo: "cadena", valor: tipoDato }];
@@ -278,7 +272,6 @@ class ParserSintactico {
       return { tipo: "cascada", nodos };
     }
 
-    // Llamadas a función / impresión
     if (this.esLlamadaFuncion()) {
       let nombreCompleto = this.consumir().valor;
       while (this.actual() && (this.actual().valor === "." || this.actual().valor === "::" || this.actual().valor === "!")) {
@@ -308,7 +301,6 @@ class ParserSintactico {
       return { tipo: "cascada", nodos };
     }
 
-    // Asignación directa
     if ((tk.tipo === "variable" || tk.tipo === "palabra reservada") &&
         (this.siguiente()?.valor === "=" || this.siguiente()?.valor === ":=")) {
       const izq = this.consumir().valor;
@@ -328,7 +320,7 @@ class ParserSintactico {
   }
 
   parsearBloqueLlaves() {
-    this.consumir(); // '{'
+    this.consumir();
     const sentenciasInternas = [];
     while (this.actual() && this.actual().valor !== "}") {
       const s = this.parsearSentencia();
@@ -427,20 +419,19 @@ class ParserSintactico {
 }
 
 // ==========================================
-// 3. RENDERIZADOR SVG CENTRADO Y SIN CORTES
+// 3. RENDERIZADOR SVG TRANSPARENTE CON AIRE VERTICAL
 // ==========================================
 function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
   svgEl.innerHTML = "";
   if (!pasos || pasos.length === 0) return;
 
-  const bgColor = esHojaBlanca ? "#ffffff" : "#090d16";
   const strokeColor = esHojaBlanca ? "#1e293b" : "#64748b";
   const textColor = esHojaBlanca ? "#0f172a" : "#f8fafc";
-  const pillFill = esHojaBlanca ? "#f8fafc" : "#162033";
+  const pillFill = esHojaBlanca ? "rgba(255, 255, 255, 0.92)" : "rgba(22, 32, 51, 0.92)";
   const pillStroke = esHojaBlanca ? "#475569" : "#3b82f6";
 
-  const NODE_H = 30;
-  const V_GAP = 24;
+  const NODE_H = 34;
+  const V_GAP = 38;
   const elements = [];
 
   let minX = Infinity;
@@ -450,7 +441,7 @@ function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
 
   function calcularAnchoCaja(texto) {
     const str = String(texto);
-    return Math.max(46, str.length * 10.2 + 26);
+    return Math.max(48, str.length * 10.4 + 28);
   }
 
   function actualizarLimites(x1, y1, x2, y2) {
@@ -515,7 +506,7 @@ function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
 
       const wIzq = calcularAnchoCaja(izqLabel);
       const wDer = calcularAnchoCaja(derLabel);
-      const spread = Math.max(76, (wIzq + wDer) / 2 + 28);
+      const spread = Math.max(82, (wIzq + wDer) / 2 + 32);
 
       const leftX = x - spread;
       const rightX = x + spread;
@@ -531,7 +522,7 @@ function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
 
         const sIzq = String(nodo.der.izq || "");
         const sDer = String(nodo.der.der || "");
-        const subSpread = Math.max(60, (calcularAnchoCaja(sIzq) + calcularAnchoCaja(sDer)) / 2 + 22);
+        const subSpread = Math.max(64, (calcularAnchoCaja(sIzq) + calcularAnchoCaja(sDer)) / 2 + 24);
         const subLeftX = rightX - subSpread;
         const subRightX = rightX + subSpread;
         const subMidY = midY + NODE_H / 2 + V_GAP + NODE_H / 2;
@@ -569,7 +560,7 @@ function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
       if (hijos.length === 0) return y;
 
       const anchos = hijos.map(h => calcularAnchoCaja(h));
-      const gapEntreHijos = 24;
+      const gapEntreHijos = 28;
       const posicionesX = [];
       let totalW = 0;
 
@@ -608,8 +599,6 @@ function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
       drawNodeBox(x, y, nodo.simbolo);
       let currentBottomY = y + NODE_H / 2;
 
-      // Renderizamos las sentencias del bloque en cascada vertical limpia
-      // para evitar ramas horizontales gigantes que se salgan del lienzo
       (nodo.hijos || []).forEach(hijo => {
         const lineEndY = currentBottomY + V_GAP;
         drawLine(x, currentBottomY, x, lineEndY);
@@ -631,7 +620,7 @@ function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
   }
 
   const originX = 0;
-  let currentY = 0;
+  let currentY = 24;
 
   pasos.forEach((paso, idx) => {
     if (idx > 0) {
@@ -649,18 +638,16 @@ function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
     maxY = 300;
   }
 
-  const pad = 44;
+  const pad = 64;
   const vbX = minX - pad;
   const vbY = minY - pad;
-  const vbW = Math.max(360, (maxX - minX) + pad * 2);
-  const vbH = Math.max(320, (maxY - minY) + pad * 2);
-
-  const bgRect = `<rect x="${vbX}" y="${vbY}" width="${vbW}" height="${vbH}" fill="${bgColor}" />`;
+  const vbW = Math.max(380, (maxX - minX) + pad * 2);
+  const vbH = Math.max(360, (maxY - minY) + pad * 2);
 
   svgEl.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
   svgEl.setAttribute("width", String(vbW));
   svgEl.setAttribute("height", String(vbH));
-  svgEl.innerHTML = bgRect + elements.join("");
+  svgEl.innerHTML = elements.join("");
 }
 
 function escapeXml(unsafe) {
@@ -796,8 +783,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   btnExportSvg.addEventListener("click", () => {
     if (!astSvg.innerHTML) return;
+    const vb = astSvg.getAttribute("viewBox") || "0 0 600 400";
+    const [x, y, w, h] = vb.split(" ").map(Number);
+    const bgHex = esHojaBlanca ? "#ffffff" : "#090d16";
+    const bgRect = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${bgHex}" />`;
+
+    const clon = astSvg.cloneNode(true);
+    clon.innerHTML = bgRect + clon.innerHTML;
+
     const serializer = new XMLSerializer();
-    const source = serializer.serializeToString(astSvg);
+    const source = serializer.serializeToString(clon);
     const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
