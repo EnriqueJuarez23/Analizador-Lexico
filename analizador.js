@@ -8,34 +8,29 @@ function tokenizarCodigo(codigo) {
   while (i < codigo.length) {
     const char = codigo[i];
 
-    // 1. Salto de línea
     if (char === "\n") {
       tokens.push({ valor: "\\n", tipo: "salto de linea" });
       i++;
       continue;
     }
 
-    // 2. Retorno de carro (ignorar \r en Windows)
     if (char === "\r") {
       i++;
       continue;
     }
 
-    // 3. Tabulador explícito (diferenciado de espacio en blanco)
     if (char === "\t") {
       tokens.push({ valor: "\\t", tipo: "tabulador" });
       i++;
       continue;
     }
 
-    // 4. Espacio en blanco individual
     if (char === " ") {
       tokens.push({ valor: " ", tipo: "espacio en blanco" });
       i++;
       continue;
     }
 
-    // 5. Comentarios de línea (// o # cuando no es directiva #define/#include)
     if (char === "/" && codigo[i + 1] === "/") {
       let comentario = "";
       while (i < codigo.length && codigo[i] !== "\n") {
@@ -45,7 +40,6 @@ function tokenizarCodigo(codigo) {
       continue;
     }
 
-    // 6. Cadenas de texto entre comillas dobles o simples
     if (char === '"' || char === "'") {
       const comilla = char;
       tokens.push({ valor: comilla, tipo: "caracter especial" });
@@ -69,7 +63,6 @@ function tokenizarCodigo(codigo) {
       continue;
     }
 
-    // 7. Números enteros
     if (/[0-9]/.test(char)) {
       let num = "";
       while (i < codigo.length && /[0-9]/.test(codigo[i])) {
@@ -79,7 +72,6 @@ function tokenizarCodigo(codigo) {
       continue;
     }
 
-    // 8. Identificadores y Palabras Reservadas (según diccionarios.js)
     if (/[a-zA-Z_]/.test(char)) {
       let palabra = "";
       while (i < codigo.length && /[a-zA-Z0-9_]/.test(codigo[i])) {
@@ -90,7 +82,6 @@ function tokenizarCodigo(codigo) {
       continue;
     }
 
-    // 9. Operadores compuestos (2 caracteres)
     const dosChars = codigo.slice(i, i + 2);
     const opsCompuestos = [":=", "==", "!=", "<=", ">=", "++", "--", "&&", "||", "->", "=>", "::", "<<", ">>", "+=", "-=", "*=", "/="];
     if (opsCompuestos.includes(dosChars)) {
@@ -99,14 +90,12 @@ function tokenizarCodigo(codigo) {
       continue;
     }
 
-    // 10. Operadores simples
     if (/[=+\-*/%<>!&|]/.test(char)) {
       tokens.push({ valor: char, tipo: "operador" });
       i++;
       continue;
     }
 
-    // 11. Caracteres especiales (#, (, ), {, }, [, ], ;, ,, :, .)
     tokens.push({ valor: char, tipo: "caracter especial" });
     i++;
   }
@@ -119,7 +108,6 @@ function tokenizarCodigo(codigo) {
 // ==========================================
 class ParserSintactico {
   constructor(tokens) {
-    // Filtramos espacios, tabuladores y saltos de línea para construir el árbol estructural
     this.tokens = tokens.filter(
       t => t.tipo !== "espacio en blanco" && t.tipo !== "tabulador" && t.tipo !== "salto de linea"
     );
@@ -152,7 +140,7 @@ class ParserSintactico {
     const tk = this.actual();
     if (!tk) return null;
 
-    // Caso 1: Directivas (#define / #include)
+    // Directivas (#define / #include)
     if (tk.valor === "#") {
       this.consumir();
       const directiva = this.consumir();
@@ -173,7 +161,7 @@ class ParserSintactico {
       return { tipo: "cascada", nodos: items };
     }
 
-    // Caso 2: Condicional if (cond) then ...
+    // Condicional if
     if (tk.valor === "if") {
       this.consumir();
       const nodos = [{ tipo: "cadena", valor: "if" }];
@@ -201,24 +189,24 @@ class ParserSintactico {
       return { tipo: "cascada", nodos };
     }
 
-    // Caso 3: Declaración de clase (class Nombre { ... })
+    // Clase
     if (tk.valor === "class" || (tk.valor === "public" && this.siguiente()?.valor === "class")) {
       const nodos = [];
       if (tk.valor === "public") nodos.push({ tipo: "cadena", valor: this.consumir().valor });
-      nodos.push({ tipo: "cadena", valor: this.consumir().valor }); // class
-      if (this.actual()) nodos.push({ tipo: "cadena", valor: this.consumir().valor }); // Nombre
+      nodos.push({ tipo: "cadena", valor: this.consumir().valor });
+      if (this.actual()) nodos.push({ tipo: "cadena", valor: this.consumir().valor });
       if (this.actual() && this.actual().valor === "{") {
         nodos.push(this.parsearBloqueLlaves());
       }
       return { tipo: "cascada", nodos };
     }
 
-    // Caso 4: Bloque de llaves aislado { ... }
+    // Bloque { ... }
     if (tk.valor === "{") {
       return this.parsearBloqueLlaves();
     }
 
-    // Caso 5: Firmas de funciones o métodos (ej. public static void main(...), fn main(), def suma():)
+    // Firmas de función
     if (this.esFirmaFuncion()) {
       const nodos = [];
       while (this.actual() && this.actual().valor !== "(") {
@@ -241,10 +229,9 @@ class ParserSintactico {
         }
         if (this.actual() && this.actual().valor === ")") this.consumir();
         if (params.length > 0) {
-          nodos.push({ tipo: "rombo_multi", centro: "params", hijos: params, cierre: null });
+          nodos.push({ tipo: "rombo_multi", hijos: params, cierre: null });
         }
       }
-      // Tipo de retorno opcional (-> i32 o :)
       while (this.actual() && this.actual().valor !== "{" && this.actual().valor !== ";") {
         nodos.push({ tipo: "cadena", valor: this.consumir().valor });
       }
@@ -254,7 +241,7 @@ class ParserSintactico {
       return { tipo: "cascada", nodos };
     }
 
-    // Caso 6: Declaraciones de variables con tipo (int w, x, z; o int i = 4;)
+    // Declaraciones con tipo
     if (["int", "float", "double", "char", "String", "boolean", "var", "let", "const"].includes(tk.valor)) {
       const tipoDato = this.consumir().valor;
       const nodos = [{ tipo: "cadena", valor: tipoDato }];
@@ -265,7 +252,6 @@ class ParserSintactico {
       const primerId = this.consumir();
       if (!primerId) return { tipo: "cascada", nodos };
 
-      // Declaración múltiple: int w, x, z;
       if (this.actual() && this.actual().valor === ",") {
         const vars = [primerId.valor];
         while (this.actual() && this.actual().valor === ",") {
@@ -277,7 +263,6 @@ class ParserSintactico {
         return { tipo: "cascada", nodos };
       }
 
-      // Declaración con asignación: int i = 4;
       if (this.actual() && (this.actual().valor === "=" || this.actual().valor === ":=")) {
         const op = this.consumir().valor;
         nodos.push({ tipo: "cadena", valor: op });
@@ -293,7 +278,7 @@ class ParserSintactico {
       return { tipo: "cascada", nodos };
     }
 
-    // Caso 7: Llamadas a función / impresión (ej. System.out.print("Hola Mundo"), printf("%d", x);)
+    // Llamadas a función / impresión
     if (this.esLlamadaFuncion()) {
       let nombreCompleto = this.consumir().valor;
       while (this.actual() && (this.actual().valor === "." || this.actual().valor === "::" || this.actual().valor === "!")) {
@@ -323,7 +308,7 @@ class ParserSintactico {
       return { tipo: "cascada", nodos };
     }
 
-    // Caso 8: Asignación directa (ej. x = 2; o w = i + j;)
+    // Asignación directa
     if ((tk.tipo === "variable" || tk.tipo === "palabra reservada") &&
         (this.siguiente()?.valor === "=" || this.siguiente()?.valor === ":=")) {
       const izq = this.consumir().valor;
@@ -339,7 +324,6 @@ class ParserSintactico {
       };
     }
 
-    // Cualquier otro token suelto
     return { tipo: "cadena", valor: this.consumir().valor };
   }
 
@@ -350,20 +334,18 @@ class ParserSintactico {
       const s = this.parsearSentencia();
       if (s) sentenciasInternas.push(s);
     }
-    if (this.actual() && this.actual().valor === "}") {
-      this.consumir(); // '}'
-    }
+    const cierreLlave = this.actual()?.valor === "}" ? this.consumir().valor : null;
     return {
       tipo: "bloque",
       simbolo: "{}",
-      hijos: sentenciasInternas
+      hijos: sentenciasInternas,
+      cierre: cierreLlave
     };
   }
 
   parsearValorDerecho() {
     const primero = this.consumir();
     if (!primero) return "";
-    // Si es una operación binaria (ej. i + j)
     if (this.actual() && ["+", "-", "*", "/", "%"].includes(this.actual().valor)) {
       const op = this.consumir().valor;
       const segundo = this.consumir()?.valor || "";
@@ -395,7 +377,6 @@ class ParserSintactico {
         this.consumir();
         continue;
       }
-      // Cadena entre comillas
       if (this.actual().valor === '"' || this.actual().valor === "'") {
         const comilla = this.consumir().valor;
         let texto = "";
@@ -404,11 +385,9 @@ class ParserSintactico {
         }
         if (this.actual() && this.actual().valor === comilla) this.consumir();
         args.push({
-          tipo: "cascada",
-          nodos: [
-            { tipo: "cadena", valor: comilla + comilla },
-            { tipo: "cadena", valor: texto }
-          ]
+          tipo: "rombo_multi",
+          hijos: [comilla, texto, comilla].filter(Boolean),
+          cierre: null
         });
       } else {
         args.push({ tipo: "cadena", valor: this.consumir().valor });
@@ -422,10 +401,7 @@ class ParserSintactico {
     while (this.siguiente(lookahead)) {
       const v = this.siguiente(lookahead).valor;
       if (v === ";" || v === "=" || v === "{") return false;
-      if (v === "(") {
-        // Verificar si antes del '(' hay al menos 2 identificadores/tipos (ej. void main o fn suma)
-        return lookahead >= 2;
-      }
+      if (v === "(") return lookahead >= 2;
       lookahead++;
     }
     return false;
@@ -451,32 +427,60 @@ class ParserSintactico {
 }
 
 // ==========================================
-// 3. RENDERIZADOR SVG EN CASCADA Y ROMBOS
+// 3. RENDERIZADOR SVG CENTRADO Y SIN CORTES
 // ==========================================
 function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
   svgEl.innerHTML = "";
   if (!pasos || pasos.length === 0) return;
 
+  const bgColor = esHojaBlanca ? "#ffffff" : "#090d16";
   const strokeColor = esHojaBlanca ? "#1e293b" : "#64748b";
-  const textColor = esHojaBlanca ? "#0f172a" : "#f1f5f9";
-  const pillFill = esHojaBlanca ? "#f8fafc" : "#1e293b";
-  const pillStroke = esHojaBlanca ? "#94a3b8" : "#334155";
+  const textColor = esHojaBlanca ? "#0f172a" : "#f8fafc";
+  const pillFill = esHojaBlanca ? "#f8fafc" : "#162033";
+  const pillStroke = esHojaBlanca ? "#475569" : "#3b82f6";
 
-  let cursorY = 35;
-  const centerX = 320;
+  const NODE_H = 30;
+  const V_GAP = 24;
   const elements = [];
 
-  function drawLine(x1, y1, x2, y2) {
-    elements.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${strokeColor}" stroke-width="1.8" />`);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  function calcularAnchoCaja(texto) {
+    const str = String(texto);
+    return Math.max(46, str.length * 10.2 + 26);
   }
 
-  function drawNodeText(x, y, text) {
+  function actualizarLimites(x1, y1, x2, y2) {
+    if (x1 < minX) minX = x1;
+    if (x2 > maxX) maxX = x2;
+    if (y1 < minY) minY = y1;
+    if (y2 > maxY) maxY = y2;
+  }
+
+  function drawLine(x1, y1, x2, y2) {
+    actualizarLimites(
+      Math.min(x1, x2),
+      Math.min(y1, y2),
+      Math.max(x1, x2),
+      Math.max(y1, y2)
+    );
+    elements.push(
+      `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${strokeColor}" stroke-width="1.8" stroke-linecap="round" />`
+    );
+  }
+
+  function drawNodeBox(x, y, text) {
     const label = String(text);
-    const width = Math.max(36, label.length * 9 + 18);
+    const width = calcularAnchoCaja(label);
+    actualizarLimites(x - width / 2, y - NODE_H / 2, x + width / 2, y + NODE_H / 2);
+
     elements.push(`
       <g transform="translate(${x}, ${y})">
-        <rect x="${-width / 2}" y="-14" width="${width}" height="28" rx="6" fill="${pillFill}" stroke="${pillStroke}" stroke-width="1.4" />
-        <text x="0" y="5" text-anchor="middle" fill="${textColor}" font-family="Consolas, monospace" font-size="13" font-weight="600">${escapeXml(label)}</text>
+        <rect x="${-width / 2}" y="${-NODE_H / 2}" width="${width}" height="${NODE_H}" rx="7" fill="${pillFill}" stroke="${pillStroke}" stroke-width="1.5" />
+        <text x="0" y="5" text-anchor="middle" fill="${textColor}" font-family="'Fira Code', Consolas, monospace" font-size="13" font-weight="600">${escapeXml(label)}</text>
       </g>
     `);
   }
@@ -485,16 +489,18 @@ function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
     if (!nodo) return y;
 
     if (nodo.tipo === "cadena") {
-      drawNodeText(x, y, nodo.valor);
-      return y + 28;
+      drawNodeBox(x, y, nodo.valor);
+      return y + NODE_H / 2;
     }
 
     if (nodo.tipo === "cascada") {
       let currentY = y;
       nodo.nodos.forEach((sub, idx) => {
         if (idx > 0) {
-          drawLine(x, currentY - 14, x, currentY + 14);
-          currentY += 14;
+          const lineStartY = currentY;
+          const lineEndY = currentY + V_GAP;
+          drawLine(x, lineStartY, x, lineEndY);
+          currentY = lineEndY + NODE_H / 2;
         }
         currentY = renderNodo(sub, x, currentY);
       });
@@ -502,110 +508,159 @@ function renderizarArbolSVG(pasos, svgEl, esHojaBlanca) {
     }
 
     if (nodo.tipo === "rombo_binario") {
-      const leftX = x - 55;
-      const rightX = x + 55;
-      const midY = y + 32;
-      const botY = y + 64;
+      const izqLabel = String(nodo.izq || "");
+      const derLabel = typeof nodo.der === "object" && nodo.der.tipo === "sub_rombo"
+        ? String(nodo.der.op)
+        : String(nodo.der || "");
 
-      // Líneas superiores del rombo
-      drawLine(x, y - 14, leftX, midY - 14);
-      drawLine(x, y - 14, rightX, midY - 14);
+      const wIzq = calcularAnchoCaja(izqLabel);
+      const wDer = calcularAnchoCaja(derLabel);
+      const spread = Math.max(76, (wIzq + wDer) / 2 + 28);
 
-      drawNodeText(leftX, midY, nodo.izq);
+      const leftX = x - spread;
+      const rightX = x + spread;
+      const midY = y + NODE_H / 2 + V_GAP + NODE_H / 2;
+
+      drawLine(x, y + NODE_H / 2, leftX, midY - NODE_H / 2);
+      drawLine(x, y + NODE_H / 2, rightX, midY - NODE_H / 2);
+
+      drawNodeBox(leftX, midY, izqLabel);
 
       if (typeof nodo.der === "object" && nodo.der.tipo === "sub_rombo") {
-        drawNodeText(rightX, midY, nodo.der.op);
-        const subLeftX = rightX - 42;
-        const subRightX = rightX + 42;
-        const subMidY = midY + 32;
-        const subBotY = midY + 64;
+        drawNodeBox(rightX, midY, derLabel);
 
-        drawLine(rightX, midY + 14, subLeftX, subMidY - 14);
-        drawLine(rightX, midY + 14, subRightX, subMidY - 14);
-        drawNodeText(subLeftX, subMidY, nodo.der.izq);
-        drawNodeText(subRightX, subMidY, nodo.der.der);
+        const sIzq = String(nodo.der.izq || "");
+        const sDer = String(nodo.der.der || "");
+        const subSpread = Math.max(60, (calcularAnchoCaja(sIzq) + calcularAnchoCaja(sDer)) / 2 + 22);
+        const subLeftX = rightX - subSpread;
+        const subRightX = rightX + subSpread;
+        const subMidY = midY + NODE_H / 2 + V_GAP + NODE_H / 2;
+
+        drawLine(rightX, midY + NODE_H / 2, subLeftX, subMidY - NODE_H / 2);
+        drawLine(rightX, midY + NODE_H / 2, subRightX, subMidY - NODE_H / 2);
+
+        drawNodeBox(subLeftX, subMidY, sIzq);
+        drawNodeBox(subRightX, subMidY, sDer);
 
         if (nodo.cierre) {
-          drawLine(leftX, midY + 14, x, subBotY - 14);
-          drawLine(subLeftX, subMidY + 14, x, subBotY - 14);
-          drawLine(subRightX, subMidY + 14, x, subBotY - 14);
-          drawNodeText(x, subBotY, nodo.cierre);
-          return subBotY + 28;
+          const botY = subMidY + NODE_H / 2 + V_GAP + NODE_H / 2;
+          drawLine(leftX, midY + NODE_H / 2, x, botY - NODE_H / 2);
+          drawLine(subLeftX, subMidY + NODE_H / 2, x, botY - NODE_H / 2);
+          drawLine(subRightX, subMidY + NODE_H / 2, x, botY - NODE_H / 2);
+          drawNodeBox(x, botY, nodo.cierre);
+          return botY + NODE_H / 2;
         }
-        return subMidY + 28;
+        return subMidY + NODE_H / 2;
       } else {
-        drawNodeText(rightX, midY, nodo.der);
+        drawNodeBox(rightX, midY, derLabel);
         if (nodo.cierre) {
-          drawLine(leftX, midY + 14, x, botY - 14);
-          drawLine(rightX, midY + 14, x, botY - 14);
-          drawNodeText(x, botY, nodo.cierre);
-          return botY + 28;
+          const botY = midY + NODE_H / 2 + V_GAP + NODE_H / 2;
+          drawLine(leftX, midY + NODE_H / 2, x, botY - NODE_H / 2);
+          drawLine(rightX, midY + NODE_H / 2, x, botY - NODE_H / 2);
+          drawNodeBox(x, botY, nodo.cierre);
+          return botY + NODE_H / 2;
         }
-        return midY + 28;
+        return midY + NODE_H / 2;
       }
     }
 
     if (nodo.tipo === "rombo_multi") {
-      const count = nodo.hijos.length;
-      const spacing = 65;
-      const totalWidth = (count - 1) * spacing;
-      const startX = x - totalWidth / 2;
-      const midY = y + 34;
-      const botY = y + 68;
+      const hijos = nodo.hijos || [];
+      if (hijos.length === 0) return y;
 
-      nodo.hijos.forEach((h, idx) => {
-        const hx = startX + idx * spacing;
-        drawLine(x, y - 14, hx, midY - 14);
-        drawNodeText(hx, midY, h);
-        if (nodo.cierre) {
-          drawLine(hx, midY + 14, x, botY - 14);
-        }
+      const anchos = hijos.map(h => calcularAnchoCaja(h));
+      const gapEntreHijos = 24;
+      const posicionesX = [];
+      let totalW = 0;
+
+      anchos.forEach((w, idx) => {
+        if (idx > 0) totalW += gapEntreHijos;
+        totalW += w;
+      });
+
+      let cursorX = x - totalW / 2;
+      anchos.forEach(w => {
+        posicionesX.push(cursorX + w / 2);
+        cursorX += w + gapEntreHijos;
+      });
+
+      const midY = y + NODE_H / 2 + V_GAP + NODE_H / 2;
+
+      hijos.forEach((h, idx) => {
+        const hx = posicionesX[idx];
+        drawLine(x, y + NODE_H / 2, hx, midY - NODE_H / 2);
+        drawNodeBox(hx, midY, h);
       });
 
       if (nodo.cierre) {
-        drawNodeText(x, botY, nodo.cierre);
-        return botY + 28;
+        const botY = midY + NODE_H / 2 + V_GAP + NODE_H / 2;
+        posicionesX.forEach(hx => {
+          drawLine(hx, midY + NODE_H / 2, x, botY - NODE_H / 2);
+        });
+        drawNodeBox(x, botY, nodo.cierre);
+        return botY + NODE_H / 2;
       }
-      return midY + 28;
+
+      return midY + NODE_H / 2;
     }
 
     if (nodo.tipo === "bloque") {
-      drawNodeText(x, y, nodo.simbolo);
-      let nextY = y + 28;
-      if (nodo.hijos.length === 1) {
-        drawLine(x, nextY - 14, x, nextY + 14);
-        nextY = renderNodo(nodo.hijos[0], x, nextY + 14);
-      } else if (nodo.hijos.length > 1) {
-        const colSpacing = 175;
-        const totalW = (nodo.hijos.length - 1) * colSpacing;
-        const startX = x - totalW / 2;
-        let maxBranchY = nextY + 25;
+      drawNodeBox(x, y, nodo.simbolo);
+      let currentBottomY = y + NODE_H / 2;
 
-        nodo.hijos.forEach((hijo, idx) => {
-          const bx = startX + idx * colSpacing;
-          drawLine(x, nextY - 14, bx, nextY + 18);
-          const endY = renderNodo(hijo, bx, nextY + 28);
-          if (endY > maxBranchY) maxBranchY = endY;
-        });
-        nextY = maxBranchY;
+      // Renderizamos las sentencias del bloque en cascada vertical limpia
+      // para evitar ramas horizontales gigantes que se salgan del lienzo
+      (nodo.hijos || []).forEach(hijo => {
+        const lineEndY = currentBottomY + V_GAP;
+        drawLine(x, currentBottomY, x, lineEndY);
+        currentBottomY = renderNodo(hijo, x, lineEndY + NODE_H / 2);
+      });
+
+      if (nodo.cierre) {
+        const closeLineEndY = currentBottomY + V_GAP;
+        drawLine(x, currentBottomY, x, closeLineEndY);
+        const closeCenterY = closeLineEndY + NODE_H / 2;
+        drawNodeBox(x, closeCenterY, nodo.cierre);
+        currentBottomY = closeCenterY + NODE_H / 2;
       }
-      return nextY;
+
+      return currentBottomY;
     }
 
     return y;
   }
 
+  const originX = 0;
+  let currentY = 0;
+
   pasos.forEach((paso, idx) => {
     if (idx > 0) {
-      drawLine(centerX, cursorY - 14, centerX, cursorY + 16);
-      cursorY += 16;
+      const lineEndY = currentY + V_GAP;
+      drawLine(originX, currentY, originX, lineEndY);
+      currentY = lineEndY + NODE_H / 2;
     }
-    cursorY = renderNodo(paso, centerX, cursorY);
+    currentY = renderNodo(paso, originX, currentY);
   });
 
-  svgEl.setAttribute("width", "660");
-  svgEl.setAttribute("height", Math.max(460, cursorY + 40));
-  svgEl.innerHTML = elements.join("");
+  if (!isFinite(minX)) {
+    minX = -200;
+    maxX = 200;
+    minY = 0;
+    maxY = 300;
+  }
+
+  const pad = 44;
+  const vbX = minX - pad;
+  const vbY = minY - pad;
+  const vbW = Math.max(360, (maxX - minX) + pad * 2);
+  const vbH = Math.max(320, (maxY - minY) + pad * 2);
+
+  const bgRect = `<rect x="${vbX}" y="${vbY}" width="${vbW}" height="${vbH}" fill="${bgColor}" />`;
+
+  svgEl.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
+  svgEl.setAttribute("width", String(vbW));
+  svgEl.setAttribute("height", String(vbH));
+  svgEl.innerHTML = bgRect + elements.join("");
 }
 
 function escapeXml(unsafe) {
@@ -654,18 +709,13 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // 1. Tokenización
     ultimosTokens = tokenizarCodigo(codigo);
-
-    // 2. Detección de lenguaje mediante diccionarios
     const lenguaje = detectarLenguajePorDiccionario(codigo, ultimosTokens);
     langBadge.classList.add("detected");
     langText.textContent = `Lenguaje detectado: ${lenguaje}`;
 
-    // 3. Renderizado de Tokens
     pintarTokens();
 
-    // 4. Análisis Sintáctico y Renderizado del Árbol
     const parser = new ParserSintactico(ultimosTokens);
     ultimosPasosAST = parser.construirPrograma();
     renderizarArbolSVG(ultimosPasosAST, astSvg, esHojaBlanca);
@@ -757,7 +807,6 @@ document.addEventListener("DOMContentLoaded", () => {
     URL.revokeObjectURL(url);
   });
 
-  // Permitir presionar la tecla Tab dentro del editor de código para insertar tabuladores reales
   codeInput.addEventListener("keydown", (e) => {
     if (e.key === "Tab") {
       e.preventDefault();
